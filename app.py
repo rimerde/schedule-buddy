@@ -3,24 +3,31 @@ import pandas as pd
 from datetime import datetime
 
 # --- 1. CONFIGURATION ---
-# Replace this with your Google Sheet "Published CSV" link
-# To get this: File > Share > Publish to Web > Link > CSV
-SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQXqcR0QBwiJO_nTN9lf5PR9vP7Ps2Smuz8djDjo7s22or7-B_yoWy79NnEaJ1LWMkG2Elnc1mh1n0k/pubhtml"
+SHEET_URL = "YOUR_PUBLIC_GOOGLE_SHEET_CSV_LINK_HERE"
 
 st.set_page_config(page_title="Friend Tracker", layout="wide")
 
-# --- 2. LOAD DATA ---
-@st.cache_data(ttl=300)  # Refreshes every 5 minutes
+# --- 2. LOAD DATA (ROBUST VERSION) ---
+@st.cache_data(ttl=60) 
 def load_data():
     try:
-        # Force the app to only read the first 6 columns, ignoring everything else
-        data = pd.read_csv(SHEET_URL, usecols=[0,1,2,3,4,5])
-        # Ensure times are strings and padded (e.g., '9:00' becomes '09:00')
-        data['Start'] = data['Start'].astype(str).str.zfill(5)
-        data['End'] = data['End'].astype(str).str.zfill(5)
+        # We read the CSV and tell it to ignore messy extra columns
+        data = pd.read_csv(SHEET_URL, on_bad_lines='skip', engine='python')
+        
+        # CLEANING: Remove leading/trailing spaces from column names
+        data.columns = data.columns.str.strip()
+        
+        # Check if the required column exists after cleaning
+        if 'Start' not in data.columns:
+            st.error(f"Column 'Start' not found. Available columns: {list(data.columns)}")
+            return pd.DataFrame()
+
+        # Ensure times are strings and padded (e.g., '9:00' -> '09:00')
+        data['Start'] = data['Start'].astype(str).str.strip().str.zfill(5)
+        data['End'] = data['End'].astype(str).str.strip().str.zfill(5)
         return data
     except Exception as e:
-        st.error(f"Error connecting to Google Sheets: {e}")
+        st.error(f"Connection Error: {e}")
         return pd.DataFrame()
 
 df = load_data()
@@ -32,35 +39,53 @@ current_time = now.strftime("%H:%M")
 
 # --- 4. THE LOGIC FUNCTION ---
 def check_status(name_to_check, full_df):
-    # Filter for the person and the day
     today_blocks = full_df[(full_df['Name'] == name_to_check) & (full_df['Day'] == current_day)]
     
-    # Check every block for a match
     for _, row in today_blocks.iterrows():
-        if row['Start'] <= current_time <= row['End']:
+        # Using string comparison for 24-hour time
+        if str(row['Start']) <= current_time <= str(row['End']):
             return {
                 "status": "Busy", 
                 "activity": row['Activity'], 
                 "until": row['End'],
                 "location": row.get('Location', 'Unknown')
             }
-    
-    # If no blocks match, they are free
     return {"status": "Free"}
 
-# --- 5. SIDEBAR: PERSONAL VIEW ---
-st.sidebar.title("👤 Personal View")
-if not df.empty:
-    all_friends = sorted(df['Name'].unique())
-    user_name = st.sidebar.selectbox("Who are you?", all_friends)
-    
-    personal_today = df[(df['Name'] == user_name) & (df['Day'] == current_day)].sort_values(by="Start")
-    
-    if not personal_today.empty:
-        for _, row in personal_today.iterrows():
-            st.sidebar.info(f"**{row['Start']} - {row['End']}**\n\n{row['Activity']} (@ {row['Location']})")
-    else:
-        st.sidebar.write("No scheduled blocks for you today!")
+# --- 5. DASHBOARD DISPLAY ---
+st.title("🤝 Group Schedule Tracker")
 
-# --- 6. MAIN DASHBOARD ---
-st.title
+if not df.empty:
+    friends = sorted(df['Name'].unique())
+    
+    # Personal View Sidebar
+    user_name = st.sidebar.selectbox("Select Your Name", friends)
+    st.sidebar.markdown(f"### Your {current_day} Schedule")
+    my_sched = df[(df['Name'] == user_name) & (df['Day'] == current_day)].sort_values('Start')
+    for _, r in my_sched.iterrows():
+        st.sidebar.write(f"🕒 {r['Start']}-{r['End']}: {r['Activity']}")
+
+    # Main Columns
+    free_list, busy_list = [], []
+    for name in friends:
+        info = check_status(name, df)
+        if info['status'] == "Busy":
+            busy_list.append(f"🔴 **{name}**: {info['activity']} (until {info['until']})")
+        else:
+            # Look for next block
+            future = df[(df['Name'] == name) & (df['Day'] == current_day) & (df['Start'] > current_time)]
+            if not future.empty:
+                next_t = future['Start'].min()
+                free_list.append(f"🟢 **{name}**: Free until {next_t}")
+            else:
+                free_list.append(f"🟢 **{name}**: Free for the day! 🌴")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.header("Free Now")
+        for item in free_list: st.write(item)
+    with col2:
+        st.header("Busy Now")
+        for item in busy_list: st.write(item)
+
+st.button("Manual Refresh", on_click=st.cache_data.clear)
