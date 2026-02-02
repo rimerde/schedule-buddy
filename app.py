@@ -17,7 +17,7 @@ st.write(f"**Current Time:** {current_day}, {current_time}")
 
 # 2. Load Data
 # For simplicity, we assume you've shared the sheet as a CSV link
-@st.cache_data(ttl=300) # Refresh data every 10 minutes
+@st.cache_data(ttl=10) # Refresh data every 10 seconds
 def load_data():
     return pd.read_csv(SHEET_URL)
 
