@@ -4,7 +4,7 @@ from datetime import datetime
 
 # --- CONFIG ---
 # Replace this with your Google Sheet "Public CSV" link or use st.connection
-SHEET_URL = "YOUR_PUBLIC_GOOGLE_SHEET_CSV_LINK_HERE"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQXqcR0QBwiJO_nTN9lf5PR9vP7Ps2Smuz8djDjo7s22or7-B_yoWy79NnEaJ1LWMkG2Elnc1mh1n0k/pub?output=csv"
 
 st.title("🤝 Group Schedule Tracker")
 
