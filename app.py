@@ -24,15 +24,23 @@ def load_data():
 df = load_data()
 
 # 3. Logic: Who is busy RIGHT NOW?
-def check_status(group):
-    # Filter for today's blocks
-    today_blocks = group[group['Day'] == current_day]
+def check_status(name_to_check, full_df):
+    # 1. Filter for the specific person AND the specific day
+    today_blocks = full_df[(full_df['Name'] == name_to_check) & (full_df['Day'] == current_day)]
     
+    # 2. Check every single block they have today
     for _, row in today_blocks.iterrows():
+        # If the current time falls inside ANY of their blocks
         if row['Start'] <= current_time <= row['End']:
-            return {"status": "Busy", "activity": row['Activity'], "until": row['End']}
+            return {
+                "status": "Busy", 
+                "activity": row['Activity'], 
+                "until": row['End'],
+                "location": row.get('Location', 'N/A')
+            }
     
-    return {"status": "Free", "activity": "Chilling", "until": "N/A"}
+    # 3. If the loop finishes and no busy block was found, they are free
+    return {"status": "Free", "activity": None, "until": None}
 
 # Group by name and check everyone
 friends = df['Name'].unique()
