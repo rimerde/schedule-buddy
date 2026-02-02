@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+import pytz # You might need to add 'pytz' to a requirements.txt file
 
 # --- 1. CONFIGURATION ---
 SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQXqcR0QBwiJO_nTN9lf5PR9vP7Ps2Smuz8djDjo7s22or7-B_yoWy79NnEaJ1LWMkG2Elnc1mh1n0k/pub?output=csv"
@@ -32,10 +33,13 @@ def load_data():
 
 df = load_data()
 
-# --- 3. CURRENT TIME LOGIC ---
-now = datetime.now()
+# --- 3. CURRENT TIME LOGIC (FIXED FOR TIMEZONES) ---
+tz = pytz.timezone('US/Eastern') # Use your actual timezone
+now = datetime.now(tz)
 current_day = now.strftime("%A")
 current_time = now.strftime("%H:%M")
+
+st.write(f"🕒 **App Time:** {current_time} ({current_day})")
 
 # --- 4. THE LOGIC FUNCTION ---
 def check_status(name_to_check, full_df):
