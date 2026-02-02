@@ -2,89 +2,64 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-# --- CONFIG ---
-# Replace this with your Google Sheet "Public CSV" link or use st.connection
-SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQXqcR0QBwiJO_nTN9lf5PR9vP7Ps2Smuz8djDjo7s22or7-B_yoWy79NnEaJ1LWMkG2Elnc1mh1n0k/pub?output=csv"
+# --- 1. CONFIGURATION ---
+# Replace this with your Google Sheet "Published CSV" link
+# To get this: File > Share > Publish to Web > Link > CSV
+SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQXqcR0QBwiJO_nTN9lf5PR9vP7Ps2Smuz8djDjo7s22or7-B_yoWy79NnEaJ1LWMkG2Elnc1mh1n0k/pubhtml"
 
-st.title("🤝 Group Schedule Tracker")
+st.set_page_config(page_title="Friend Tracker", layout="wide")
 
-# 1. Get Current Time/Day
-now = datetime.now()
-current_day = now.strftime("%A") # e.g., "Monday"
-current_time = now.strftime("%H:%M")
-
-st.write(f"**Current Time:** {current_day}, {current_time}")
-
-# 2. Load Data
-# For simplicity, we assume you've shared the sheet as a CSV link
-@st.cache_data(ttl=10) # Refresh data every 10 seconds
+# --- 2. LOAD DATA ---
+@st.cache_data(ttl=300)  # Refreshes every 5 minutes
 def load_data():
-    return pd.read_csv(SHEET_URL)
+    try:
+        data = pd.read_csv(SHEET_URL)
+        # Ensure times are strings and padded (e.g., '9:00' becomes '09:00')
+        data['Start'] = data['Start'].astype(str).str.zfill(5)
+        data['End'] = data['End'].astype(str).str.zfill(5)
+        return data
+    except Exception as e:
+        st.error(f"Error connecting to Google Sheets: {e}")
+        return pd.DataFrame()
 
 df = load_data()
 
-# 3. Logic: Who is busy RIGHT NOW?
-# 1. The Fixed Function (place this before the loop)
-# --- 1. The Function Definition ---
+# --- 3. CURRENT TIME LOGIC ---
+now = datetime.now()
+current_day = now.strftime("%A")
+current_time = now.strftime("%H:%M")
+
+# --- 4. THE LOGIC FUNCTION ---
 def check_status(name_to_check, full_df):
-    # Filter for the specific person AND the specific day
+    # Filter for the person and the day
     today_blocks = full_df[(full_df['Name'] == name_to_check) & (full_df['Day'] == current_day)]
     
+    # Check every block for a match
     for _, row in today_blocks.iterrows():
-        # str() ensures '9:00' and '09:00' don't break the logic
-        start_val = str(row['Start'])
-        end_val = str(row['End'])
-        
-        if start_val <= current_time <= end_val:
+        if row['Start'] <= current_time <= row['End']:
             return {
                 "status": "Busy", 
                 "activity": row['Activity'], 
-                "until": end_val,
-                "location": row.get('Location', 'N/A')
+                "until": row['End'],
+                "location": row.get('Location', 'Unknown')
             }
+    
+    # If no blocks match, they are free
     return {"status": "Free"}
 
-# --- 2. The Dashboard Loop ---
-friends = df['Name'].unique()
-free_list = []
-busy_list = []
-
-for name in friends:
-    # IMPORTANT: We pass the name (string) and the whole df (table)
-    status_info = check_status(name, df)
+# --- 5. SIDEBAR: PERSONAL VIEW ---
+st.sidebar.title("👤 Personal View")
+if not df.empty:
+    all_friends = sorted(df['Name'].unique())
+    user_name = st.sidebar.selectbox("Who are you?", all_friends)
     
-    if status_info['status'] == "Busy":
-        busy_list.append(f"🔴 **{name}**: {status_info['activity']} (until {status_info['until']})")
+    personal_today = df[(df['Name'] == user_name) & (df['Day'] == current_day)].sort_values(by="Start")
+    
+    if not personal_today.empty:
+        for _, row in personal_today.iterrows():
+            st.sidebar.info(f"**{row['Start']} - {row['End']}**\n\n{row['Activity']} (@ {row['Location']})")
     else:
-        # Check for their next upcoming block today
-        future_blocks = df[(df['Name'] == name) & (df['Day'] == current_day) & (df.astype(str)['Start'] > current_time)]
-        if not future_blocks.empty:
-            next_start = future_blocks['Start'].min()
-            free_list.append(f"🟢 **{name}**: Free until {next_start}")
-        else:
-            free_list.append(f"🟢 **{name}**: Free for the day! 🌴")
+        st.sidebar.write("No scheduled blocks for you today!")
 
-# Group by name and check everyone
-friends = df['Name'].unique()
-free_list = []
-busy_list = []
-
-for name in friends:
-    status_info = check_status(df[df['Name'] == name])
-    if status_info['status'] == "Busy":
-        busy_list.append(f"🔴 **{name}**: {status_info['activity']} (until {status_info['until']})")
-    else:
-        free_list.append(f"🟢 **{name}**: Free right now")
-
-# 4. Dashboard Display
-col1, col2 = st.columns(2)
-
-with col1:
-    st.header("Free")
-    for item in free_list:
-        st.write(item)
-
-with col2:
-    st.header("Busy")
-    for item in busy_list:
-        st.write(item)
+# --- 6. MAIN DASHBOARD ---
+st.title
