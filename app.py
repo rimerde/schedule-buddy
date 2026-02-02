@@ -25,35 +25,39 @@ df = load_data()
 
 # 3. Logic: Who is busy RIGHT NOW?
 # 1. The Fixed Function (place this before the loop)
+# --- 1. The Function Definition ---
 def check_status(name_to_check, full_df):
     # Filter for the specific person AND the specific day
     today_blocks = full_df[(full_df['Name'] == name_to_check) & (full_df['Day'] == current_day)]
     
     for _, row in today_blocks.iterrows():
-        # Check if current time is within this specific block
-        if str(row['Start']) <= current_time <= str(row['End']):
+        # str() ensures '9:00' and '09:00' don't break the logic
+        start_val = str(row['Start'])
+        end_val = str(row['End'])
+        
+        if start_val <= current_time <= end_val:
             return {
                 "status": "Busy", 
                 "activity": row['Activity'], 
-                "until": row['End'],
+                "until": end_val,
                 "location": row.get('Location', 'N/A')
             }
     return {"status": "Free"}
 
-# 2. The Fixed Loop
+# --- 2. The Dashboard Loop ---
 friends = df['Name'].unique()
 free_list = []
 busy_list = []
 
 for name in friends:
-    # FIX: Pass the 'name' string and the 'df' DataFrame correctly
+    # IMPORTANT: We pass the name (string) and the whole df (table)
     status_info = check_status(name, df)
     
     if status_info['status'] == "Busy":
         busy_list.append(f"🔴 **{name}**: {status_info['activity']} (until {status_info['until']})")
     else:
-        # Check for their next upcoming block
-        future_blocks = df[(df['Name'] == name) & (df['Day'] == current_day) & (df['Start'] > current_time)]
+        # Check for their next upcoming block today
+        future_blocks = df[(df['Name'] == name) & (df['Day'] == current_day) & (df.astype(str)['Start'] > current_time)]
         if not future_blocks.empty:
             next_start = future_blocks['Start'].min()
             free_list.append(f"🟢 **{name}**: Free until {next_start}")
