@@ -13,7 +13,8 @@ st.set_page_config(page_title="Friend Tracker", layout="wide")
 @st.cache_data(ttl=300)  # Refreshes every 5 minutes
 def load_data():
     try:
-        data = pd.read_csv(SHEET_URL)
+        # Force the app to only read the first 6 columns, ignoring everything else
+        data = pd.read_csv(SHEET_URL, usecols=[0,1,2,3,4,5])
         # Ensure times are strings and padded (e.g., '9:00' becomes '09:00')
         data['Start'] = data['Start'].astype(str).str.zfill(5)
         data['End'] = data['End'].astype(str).str.zfill(5)
