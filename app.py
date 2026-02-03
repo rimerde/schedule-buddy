@@ -63,7 +63,7 @@ def check_status(name_to_check, full_df):
 
 # --- 5. DASHBOARD ---
 st.title("🤝 Group Schedule Tracker")
-st.write(f"Current App Time: **{current_time}** ({current_day})")
+st.write(f"Current App Time: **{to_12h(current_time)}**")
 
 if not df.empty:
     # Get unique names and filter out any weird 'nan' values
