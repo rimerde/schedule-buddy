@@ -4,30 +4,46 @@ from datetime import datetime
 import pytz
 
 # --- 1. CONFIGURATION ---
+# Ensure this link ends in output=csv
 SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQXqcR0QBwiJO_nTN9lf5PR9vP7Ps2Smuz8djDjo7s22or7-B_yoWy79NnEaJ1LWMkG2Elnc1mh1n0k/pub?output=csv"
 
 st.set_page_config(page_title="Friend Tracker", layout="wide")
 
-# --- 2. LOAD DATA (ROBUST VERSION) ---
+# --- 2. TIMEZONE & FORMATTING HELPERS ---
+def get_current_time():
+    tz = pytz.timezone('US/Eastern')
+    now = datetime.now(tz)
+    return now.strftime("%A"), now.strftime("%H:%M")
+
+def to_12h(time_str):
+    """Converts '14:30' to '2:30 PM'"""
+    try:
+        # %I is 12h hour, %M is minutes, %p is AM/PM
+        return datetime.strptime(time_str, "%H:%M").strftime("%I:%M %p").lstrip('0')
+    except:
+        return time_str
+
+current_day, current_time = get_current_time()
+
+# --- 3. LOAD DATA (ROBUST VERSION) ---
 @st.cache_data(ttl=60) 
 def load_data():
     try:
-        # Load the CSV
         data = pd.read_csv(SHEET_URL, on_bad_lines='skip', engine='python')
         
-        # CLEANING: Remove hidden spaces from column headers
+        # Clean headers (removes hidden spaces)
         data.columns = data.columns.str.strip()
         
-        # SAFETY CHECK: If 'Name' is missing, show a helpful error instead of crashing
+        # Safety check for the 'Name' column
         if 'Name' not in data.columns:
             st.error(f"⚠️ 'Name' column not found! I see: {list(data.columns)}")
-            return pd.DataFrame() # Return empty table
+            return pd.DataFrame()
 
-        # Clean the actual data
+        # Drop truly empty rows and clean names
         data = data.dropna(subset=['Name'])
         data['Name'] = data['Name'].astype(str).str.strip()
         
-        # Ensure times are 00:00 format
+        # Standardize time columns for comparison logic (09:00, 14:30)
         for col in ['Start', 'End']:
             if col in data.columns:
                 data[col] = data[col].astype(str).str.strip().str.zfill(5)
@@ -39,58 +55,57 @@ def load_data():
 
 df = load_data()
 
-# --- 3. CURRENT TIME (US EASTERN) ---
-tz = pytz.timezone('US/Eastern')
-now = datetime.now(tz)
-current_day = now.strftime("%A")
-current_time = now.strftime("%H:%M")
-
-# --- 12 HOUR HELPER FUNCTION ---
-def to_12h(time_str):
-    try:
-        # converts '14:30' to '2:30 PM'
-        return datetime.strptime(time_str, "%H:%M").strftime("%I:%M %p").lstrip('0')
-    except:
-        return time_str
-
-# --- 4. LOGIC FUNCTION ---
+# --- 4. STATUS LOGIC ---
 def check_status(name_to_check, full_df):
     today_blocks = full_df[(full_df['Name'] == name_to_check) & (full_df['Day'] == current_day)]
+    
     for _, row in today_blocks.iterrows():
+        # Logical comparison happens in 24h format
         if str(row['Start']) <= current_time <= str(row['End']):
-            return {"status": "Busy", "activity": row['Activity'], "until": row['End']}
+            return {
+                "status": "Busy", 
+                "activity": row['Activity'], 
+                "until": row['End'],
+                "location": row.get('Location', 'N/A')
+            }
     return {"status": "Free"}
 
-# --- 5. DASHBOARD ---
+# --- 5. MAIN DASHBOARD ---
 st.title("🤝 Group Schedule Tracker")
-st.write(f"Current App Time: **{to_12h(current_time)}**")
+st.write(f"Current Time: **{to_12h(current_time)}** ({current_day})")
 
 if not df.empty:
-    # Get unique names and filter out any weird 'nan' values
+    # Get unique list of friends, ignoring empty/NaN entries
     friends = sorted([str(n) for n in df['Name'].unique() if str(n).lower() != 'nan'])
     
-    # Sidebar
+    # --- SIDEBAR: PERSONAL VIEW ---
     user_name = st.sidebar.selectbox("Select Your Name", friends)
     st.sidebar.subheader(f"Your {current_day} Schedule")
+    
     my_sched = df[(df['Name'] == user_name) & (df['Day'] == current_day)].sort_values('Start')
-    for _, r in my_sched.iterrows():
-        start_12 = to_12h(r['Start'])
-        end_12 = to_12h(r['End'])
-        st.sidebar.write(f"🕒 {start_12} - {end_12}: {r['Activity']}")
+    
+    if not my_sched.empty:
+        for _, r in my_sched.iterrows():
+            # Displaying in 12h format
+            st.sidebar.info(f"**{to_12h(r['Start'])} - {to_12h(r['End'])}**\n\n{r['Activity']}")
+    else:
+        st.sidebar.write("No classes today! 🌴")
 
-    # Main columns
-    free_list, busy_list = [], []
+    # --- MAIN COLUMNS: GROUP VIEW ---
+    free_list = []
+    busy_list = []
+
     for name in friends:
         info = check_status(name, df)
         
         if info['status'] == "Busy":
-            display_until = to_12h(info['until'])
-            busy_list.append(f"🔴 **{name}**: {info['activity']} (until {info['until']})")
+            busy_list.append(f"🔴 **{name}**: {info['activity']} (until {to_12h(info['until'])})")
         else:
+            # Find next upcoming block
             future = df[(df['Name'] == name) & (df['Day'] == current_day) & (df['Start'] > current_time)]
             if not future.empty:
-                next_t = to_12h(future['Start'].min())
-                free_list.append(f"🟢 **{name}**: Free until {next_t}")
+                next_start = future['Start'].min()
+                free_list.append(f"🟢 **{name}**: Free until {to_12h(next_start)}")
             else:
                 free_list.append(f"🟢 **{name}**: Free for the day! 🌴")
 
@@ -98,10 +113,15 @@ if not df.empty:
     with col1:
         st.header("Free Now")
         for item in free_list: st.write(item)
+
     with col2:
         st.header("Busy Now")
         for item in busy_list: st.write(item)
-else:
-    st.warning("Data is empty or headers are wrong. Please check your Google Sheet.")
 
-st.button("Manual Refresh", on_click=st.cache_data.clear)
+else:
+    st.warning("Please check your Google Sheet connection and column headers.")
+
+# Refresh button
+if st.button("Manual Refresh"):
+    st.cache_data.clear()
+    st.rerun()
