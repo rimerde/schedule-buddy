@@ -88,7 +88,7 @@ if not df.empty:
         for _, r in my_sched.iterrows():
             loc = r.get('Location', 'N/A')
             # Displaying in 12h format
-            st.sidebar.info(f"**{to_12h(r['Start'])} - {to_12h(r['End'])}**\n\n{r['Activity']}  \n📍 *{loc}*")
+            st.sidebar.info(f"**{to_12h(r['Start'])} - {to_12h(r['End'])}**\n\n{r['Activity']} 📍 *{loc}*")
     else:
         st.sidebar.write("No classes today! 🌴")
 
