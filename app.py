@@ -45,6 +45,14 @@ now = datetime.now(tz)
 current_day = now.strftime("%A")
 current_time = now.strftime("%H:%M")
 
+# --- 12 HOUR HELPER FUNCTION ---
+def to_12h(time_str):
+    try:
+        # converts '14:30' to '2:30 PM'
+        return datetime.strptime(time_str, "%H:%M").strftime("%I:%M %p").lstrip('0')
+    except:
+        return time_str
+
 # --- 4. LOGIC FUNCTION ---
 def check_status(name_to_check, full_df):
     today_blocks = full_df[(full_df['Name'] == name_to_check) & (full_df['Day'] == current_day)]
@@ -66,18 +74,22 @@ if not df.empty:
     st.sidebar.subheader(f"Your {current_day} Schedule")
     my_sched = df[(df['Name'] == user_name) & (df['Day'] == current_day)].sort_values('Start')
     for _, r in my_sched.iterrows():
-        st.sidebar.write(f"🕒 {r['Start']}-{r['End']}: {r['Activity']}")
+        start_12 = to_12h(r['Start'])
+        end_12 = to_12h(r['End'])
+        st.sidebar.write(f"🕒 {start_12} - {end_12}: {r['Activity']}")
 
     # Main columns
     free_list, busy_list = [], []
     for name in friends:
         info = check_status(name, df)
+        
         if info['status'] == "Busy":
+            display_until = to_12h(info['until'])
             busy_list.append(f"🔴 **{name}**: {info['activity']} (until {info['until']})")
         else:
             future = df[(df['Name'] == name) & (df['Day'] == current_day) & (df['Start'] > current_time)]
             if not future.empty:
-                next_t = future['Start'].min()
+                next_t = to_12h(future['Start'].min())
                 free_list.append(f"🟢 **{name}**: Free until {next_t}")
             else:
                 free_list.append(f"🟢 **{name}**: Free for the day! 🌴")
