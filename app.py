@@ -91,7 +91,7 @@ if not df.empty:
             st.sidebar.info(
                 f"**{to_12h(r['Start'])} - {to_12h(r['End'])}**\n\n"
                 f"{r['Activity']}\n\n"
-                f"📍 *{loc}*"
+                f"@ *{loc}*"
             )
     else:
         st.sidebar.write("No classes today! 🌴")
@@ -104,7 +104,7 @@ if not df.empty:
         info = check_status(name, df)
         
         if info['status'] == "Busy":
-            loc = info.get('Location', 'N/A')
+            loc = info.get('location', 'N/A')
             busy_list.append(f"🔴 **{name}**: {info['activity']} @ **{loc}** (until {to_12h(info['until'])})")
         else:
             # Find next upcoming block
