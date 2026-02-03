@@ -86,8 +86,9 @@ if not df.empty:
     
     if not my_sched.empty:
         for _, r in my_sched.iterrows():
+            loc = r.get('Location', 'N/A')
             # Displaying in 12h format
-            st.sidebar.info(f"**{to_12h(r['Start'])} - {to_12h(r['End'])}**\n\n{r['Activity']}")
+            st.sidebar.info(f"**{to_12h(r['Start'])} - {to_12h(r['End'])}**\n\n{r['Activity']}  \n📍 *{loc}*")
     else:
         st.sidebar.write("No classes today! 🌴")
 
@@ -99,7 +100,7 @@ if not df.empty:
         info = check_status(name, df)
         
         if info['status'] == "Busy":
-            loc = info.get('location', 'N/A')
+            loc = info.get('Location', 'N/A')
             busy_list.append(f"🔴 **{name}**: {info['activity']} @ **{loc}** (until {to_12h(info['until'])})")
         else:
             # Find next upcoming block
