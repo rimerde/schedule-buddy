@@ -99,7 +99,8 @@ if not df.empty:
         info = check_status(name, df)
         
         if info['status'] == "Busy":
-            busy_list.append(f"🔴 **{name}**: {info['activity']} (until {to_12h(info['until'])})")
+            loc = info.get('location', 'N/A')
+            busy_list.append(f"🔴 **{name}**: {info['activity']} @ **{loc}** (until {to_12h(info['until'])})")
         else:
             # Find next upcoming block
             future = df[(df['Name'] == name) & (df['Day'] == current_day) & (df['Start'] > current_time)]
