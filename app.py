@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-import pytz # You might need to add 'pytz' to a requirements.txt file
+import pytz
 
 # --- 1. CONFIGURATION ---
 SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQXqcR0QBwiJO_nTN9lf5PR9vP7Ps2Smuz8djDjo7s22or7-B_yoWy79NnEaJ1LWMkG2Elnc1mh1n0k/pub?output=csv"
@@ -12,20 +12,26 @@ st.set_page_config(page_title="Friend Tracker", layout="wide")
 @st.cache_data(ttl=60) 
 def load_data():
     try:
-        # We read the CSV and tell it to ignore messy extra columns
+        # Load the CSV
         data = pd.read_csv(SHEET_URL, on_bad_lines='skip', engine='python')
         
-        # CLEANING: Remove leading/trailing spaces from column names
+        # CLEANING: Remove hidden spaces from column headers
         data.columns = data.columns.str.strip()
         
-        # Check if the required column exists after cleaning
-        if 'Start' not in data.columns:
-            st.error(f"Column 'Start' not found. Available columns: {list(data.columns)}")
-            return pd.DataFrame()
+        # SAFETY CHECK: If 'Name' is missing, show a helpful error instead of crashing
+        if 'Name' not in data.columns:
+            st.error(f"⚠️ 'Name' column not found! I see: {list(data.columns)}")
+            return pd.DataFrame() # Return empty table
 
-        # Ensure times are strings and padded (e.g., '9:00' -> '09:00')
-        data['Start'] = data['Start'].astype(str).str.strip().str.zfill(5)
-        data['End'] = data['End'].astype(str).str.strip().str.zfill(5)
+        # Clean the actual data
+        data = data.dropna(subset=['Name'])
+        data['Name'] = data['Name'].astype(str).str.strip()
+        
+        # Ensure times are 00:00 format
+        for col in ['Start', 'End']:
+            if col in data.columns:
+                data[col] = data[col].astype(str).str.strip().str.zfill(5)
+        
         return data
     except Exception as e:
         st.error(f"Connection Error: {e}")
@@ -33,50 +39,42 @@ def load_data():
 
 df = load_data()
 
-# --- 3. CURRENT TIME LOGIC (FIXED FOR TIMEZONES) ---
-tz = pytz.timezone('US/Eastern') # Use your actual timezone
+# --- 3. CURRENT TIME (US EASTERN) ---
+tz = pytz.timezone('US/Eastern')
 now = datetime.now(tz)
 current_day = now.strftime("%A")
 current_time = now.strftime("%H:%M")
 
-st.write(f"🕒 **App Time:** {current_time} ({current_day})")
-
-# --- 4. THE LOGIC FUNCTION ---
+# --- 4. LOGIC FUNCTION ---
 def check_status(name_to_check, full_df):
     today_blocks = full_df[(full_df['Name'] == name_to_check) & (full_df['Day'] == current_day)]
-    
     for _, row in today_blocks.iterrows():
-        # Using string comparison for 24-hour time
         if str(row['Start']) <= current_time <= str(row['End']):
-            return {
-                "status": "Busy", 
-                "activity": row['Activity'], 
-                "until": row['End'],
-                "location": row.get('Location', 'Unknown')
-            }
+            return {"status": "Busy", "activity": row['Activity'], "until": row['End']}
     return {"status": "Free"}
 
-# --- 5. DASHBOARD DISPLAY ---
+# --- 5. DASHBOARD ---
 st.title("🤝 Group Schedule Tracker")
+st.write(f"Current App Time: **{current_time}** ({current_day})")
 
 if not df.empty:
-    friends = sorted(df['Name'].unique())
+    # Get unique names and filter out any weird 'nan' values
+    friends = sorted([str(n) for n in df['Name'].unique() if str(n).lower() != 'nan'])
     
-    # Personal View Sidebar
+    # Sidebar
     user_name = st.sidebar.selectbox("Select Your Name", friends)
-    st.sidebar.markdown(f"### Your {current_day} Schedule")
+    st.sidebar.subheader(f"Your {current_day} Schedule")
     my_sched = df[(df['Name'] == user_name) & (df['Day'] == current_day)].sort_values('Start')
     for _, r in my_sched.iterrows():
         st.sidebar.write(f"🕒 {r['Start']}-{r['End']}: {r['Activity']}")
 
-    # Main Columns
+    # Main columns
     free_list, busy_list = [], []
     for name in friends:
         info = check_status(name, df)
         if info['status'] == "Busy":
             busy_list.append(f"🔴 **{name}**: {info['activity']} (until {info['until']})")
         else:
-            # Look for next block
             future = df[(df['Name'] == name) & (df['Day'] == current_day) & (df['Start'] > current_time)]
             if not future.empty:
                 next_t = future['Start'].min()
@@ -91,5 +89,7 @@ if not df.empty:
     with col2:
         st.header("Busy Now")
         for item in busy_list: st.write(item)
+else:
+    st.warning("Data is empty or headers are wrong. Please check your Google Sheet.")
 
 st.button("Manual Refresh", on_click=st.cache_data.clear)
