@@ -90,8 +90,8 @@ if not df.empty:
             # Displaying in 12h format
             st.sidebar.info(
                 f"**{to_12h(r['Start'])} - {to_12h(r['End'])}**\n\n"
-                f"{r['Activity']}\n\n"
-                f"@ *{loc}*"
+                f"{r['Activity']}\n"
+                f" @ *{loc}*"
             )
     else:
         st.sidebar.write("No classes today! 🌴")
